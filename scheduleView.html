@@ -1,0 +1,1176 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>線表 — タイムライン作成ツール</title>
+<style>
+  :root{
+    --bg:#f6f7f9;
+    --card:#ffffff;
+    --ink:#242b36;
+    --ink-soft:#6b7480;
+    --line:#e3e7ee;
+    --line-strong:#c4ccdb;
+    --grid-dot:#d7dde8;
+    --accent:#3f6ad8;
+    --accent-soft:#eaf1fb;
+    --weekend:#f1f4f9;
+    --today:#e0574a;
+    --panel-w:224px;
+    --row-h:42px;
+    --head-h:64px;
+    --total-w:800px;
+    --radius:12px;
+    --shadow:0 1px 2px rgba(20,26,36,.06), 0 6px 18px rgba(20,26,36,.07);
+    --font:"Segoe UI",system-ui,-apple-system,"Hiragino Sans GB","Noto Sans JP",sans-serif;
+  }
+  *{box-sizing:border-box}
+  html,body{margin:0;padding:0}
+  body{background:var(--bg);color:var(--ink);font-family:var(--font);font-size:14px;line-height:1.5;-webkit-font-smoothing:antialiased}
+  .app{max-width:1180px;margin:0 auto;padding:18px 16px 40px}
+
+  .topbar{display:flex;align-items:baseline;justify-content:space-between;gap:12px;flex-wrap:wrap;margin:2px 0 14px}
+  .brand{display:flex;align-items:baseline;gap:10px}
+  .brand h1{font-size:19px;font-weight:650;letter-spacing:.02em;margin:0}
+  .brand .sub{color:var(--ink-soft);font-size:12px}
+  .hint{color:var(--ink-soft);font-size:12px}
+  .hint kbd{font-family:ui-monospace,Consolas,monospace;font-size:11px;background:#eef1f6;border:1px solid var(--line);border-radius:4px;padding:1px 5px;color:#3c4653}
+
+  .controls{background:var(--card);border:1px solid var(--line);border-radius:var(--radius);box-shadow:var(--shadow);padding:14px 16px;display:flex;gap:14px;flex-wrap:wrap;align-items:flex-end}
+  .field{display:flex;flex-direction:column;gap:5px}
+  .field>span{font-size:11px;letter-spacing:.06em;color:var(--ink-soft);text-transform:uppercase}
+  .field input[type=date],.field input[type=number],.field select{font:inherit;color:var(--ink);background:#fff;border:1px solid var(--line);border-radius:8px;padding:7px 9px;min-width:0}
+  .field input[type=date]{width:150px}
+  .field input[type=number]{width:74px}
+  .field select{width:112px}
+  .field input:focus,.field select:focus{outline:2px solid var(--accent-soft);border-color:var(--accent)}
+  .zoom{display:flex;align-items:center;gap:8px}
+  .zoom input[type=range]{width:130px;accent-color:var(--accent)}
+  .zoom output{font-size:12px;color:var(--ink-soft);min-width:38px}
+  .check{display:flex;align-items:center;gap:7px;font-size:13px;color:var(--ink-soft);padding-bottom:7px}
+  .check input{accent-color:var(--accent)}
+  .spacer{flex:1 1 auto}
+
+  .btn{font:inherit;font-weight:600;color:#2c3a52;background:#fff;border:1px solid var(--line-strong);border-radius:9px;padding:8px 12px;cursor:pointer;transition:background .15s,border-color .15s,transform .05s}
+  .btn:hover{background:#f3f6fb;border-color:var(--accent)}
+  .btn:active{transform:translateY(1px)}
+  .btn.primary{background:var(--accent);border-color:var(--accent);color:#fff}
+  .btn.primary:hover{background:#2f5bc6}
+  .btn.danger{color:#8f3b33;border-color:#e2b7b1;background:#fff}
+  .btn.danger:hover{background:#fbf1ef;border-color:#c9705f}
+  .btn.ghost{background:transparent;border-color:var(--line)}
+  .btn:focus-visible{outline:2px solid var(--accent-soft);outline-offset:1px}
+
+  .status{display:flex;gap:12px;flex-wrap:wrap;align-items:center;margin:12px 2px 10px;color:var(--ink-soft)}
+  .chip{background:#fff;border:1px solid var(--line);border-radius:999px;padding:4px 10px;font-size:12px}
+  .chip.today{border-color:#eab6ad;color:#a0453a;background:#fdf4f2}
+  .chip b{color:var(--ink);font-weight:600}
+
+  .card{background:var(--card);border:1px solid var(--line);border-radius:var(--radius);box-shadow:var(--shadow);overflow:hidden}
+  .scroll{overflow:auto;max-height:min(70vh,640px)}
+  .inner{min-width:calc(var(--panel-w) + var(--total-w));position:relative}
+  .head{display:flex;position:sticky;top:0;z-index:6;height:var(--head-h);background:#fbfcfe;border-bottom:1px solid var(--line-strong)}
+  .panel{width:var(--panel-w);flex:0 0 var(--panel-w);position:sticky;left:0;z-index:7;background:var(--card);border-right:1px solid var(--line)}
+  .head .panel{background:#fbfcfe;display:flex;flex-direction:column;justify-content:center;padding:8px 12px;gap:2px}
+  .head .panel .t{font-size:12px;font-weight:650;letter-spacing:.04em}
+  .head .panel .s{font-size:11px;color:var(--ink-soft)}
+  .headtrack{position:relative;height:var(--head-h)}
+  .bands{position:absolute;top:0;left:0;right:0;height:26px;border-bottom:1px dotted var(--grid-dot)}
+  .band{position:absolute;top:0;height:26px;display:flex;align-items:center;padding:0 8px 0 0;text-indent:8px;font-size:11px;font-weight:650;letter-spacing:.04em;color:#4a5768;background:#f4f7fb;border-right:1px solid var(--line-strong);overflow:hidden;white-space:nowrap}
+  .ticks{position:absolute;top:26px;left:0;height:38px}
+  .tick{position:absolute;top:2px;display:flex;flex-direction:column;align-items:center;gap:1px;font-size:10px;color:var(--ink-soft)}
+  .tick .d{font-weight:600;color:#48566a}
+  .tick.we{color:#98a1af}
+  .tick.we .d{color:#7c8797}
+
+  .gridlayer{position:absolute;top:var(--head-h);left:var(--panel-w);z-index:1;pointer-events:none}
+  .gridlayer svg{display:block}
+
+  .rows{position:relative;z-index:2}
+  .row{display:flex;height:var(--row-h);border-bottom:1px dotted var(--grid-dot)}
+  .row:last-child{border-bottom:0}
+  .row .panel{display:flex;align-items:center;gap:6px;padding:0 10px}
+  .swatch{width:14px;height:14px;flex:0 0 14px;border-radius:4px;border:1px solid rgba(0,0,0,.16);padding:0;cursor:pointer;background:none}
+  .swatch::-webkit-color-swatch-wrapper{padding:0}
+  .swatch::-webkit-color-swatch{border:none;border-radius:4px}
+  .swatch::-moz-color-swatch{border:none;border-radius:4px}
+  .name{flex:1 1 auto;min-width:0;font:inherit;color:var(--ink);background:transparent;border:1px solid transparent;border-radius:6px;padding:4px 6px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  .name:hover{border-color:var(--line)}
+  .name:focus{outline:2px solid var(--accent-soft);border-color:var(--accent);background:#fff}
+  .mini{width:24px;height:24px;flex:0 0 24px;border-radius:6px;border:1px solid var(--line);background:#fff;color:#4a5768;font-size:14px;line-height:1;display:inline-flex;align-items:center;justify-content:center;cursor:pointer}
+  .mini:hover{border-color:var(--accent);color:var(--accent);background:#f5f8fd}
+  .mini.del:hover{border-color:#c9705f;color:#a0453a;background:#fbf1ef}
+  .mini.off{opacity:.38}
+  .track{position:relative;flex:1 1 auto;cursor:copy}
+  .track:hover{background:rgba(63,106,216,.04)}
+  .block{position:absolute;top:6px;height:calc(var(--row-h) - 12px);border-radius:8px;display:flex;align-items:center;gap:6px;padding:0 9px;cursor:grab;border:1px solid rgba(0,0,0,.14);box-shadow:0 1px 2px rgba(20,26,36,.10);overflow:hidden}
+  .block:hover{box-shadow:0 2px 8px rgba(20,26,36,.16)}
+  .block.dragging{cursor:grabbing;box-shadow:0 4px 14px rgba(20,26,36,.22)}
+  .block.selected{outline:2px solid var(--accent);outline-offset:1px}
+  .block .label{font-size:12px;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;flex:1 1 auto}
+  .block .days{font-size:11px;opacity:.8;white-space:nowrap}
+  .block .del{position:absolute;right:3px;top:3px;width:16px;height:16px;border:0;border-radius:5px;background:rgba(255,255,255,.75);color:#3c4653;font-size:12px;line-height:1;display:none;align-items:center;justify-content:center;cursor:pointer}
+  .block:hover .del,.block.selected .del{display:inline-flex}
+  .block .del:hover{background:#fff;color:#a0453a}
+  .grip{position:absolute;top:0;bottom:0;width:9px;cursor:ew-resize;display:flex;justify-content:center;align-items:center}
+  .grip.l{left:0}
+  .grip.r{right:0}
+  .grip::after{content:"";width:2px;height:60%;border-radius:2px;background:rgba(0,0,0,.22)}
+  .grip:hover::after{background:rgba(0,0,0,.45)}
+  .tip{position:absolute;top:-20px;font-size:11px;color:#2c3a52;background:#fff;border:1px solid var(--line-strong);border-radius:6px;padding:2px 7px;white-space:nowrap;pointer-events:none;box-shadow:var(--shadow)}
+
+  .empty{padding:26px 14px;color:var(--ink-soft);font-size:13px}
+
+  .detail{margin-top:14px}
+  .card-h{display:flex;gap:8px;flex-wrap:wrap;align-items:baseline;justify-content:space-between;padding:11px 16px;border-bottom:1px solid var(--line);background:#fbfcfe}
+  .card-h .t{font-size:13px;font-weight:650;letter-spacing:.04em}
+  .card-h .s{font-size:12px;color:var(--ink-soft)}
+  .tablewrap{overflow-x:auto}
+  table.dt{width:100%;min-width:760px;border-collapse:collapse}
+  table.dt th{font-size:11px;letter-spacing:.06em;text-transform:uppercase;color:var(--ink-soft);font-weight:600;text-align:left;padding:8px 12px;border-bottom:1px solid var(--line);background:#fbfcfe}
+  table.dt td{padding:7px 12px;border-bottom:1px dotted var(--grid-dot);vertical-align:top}
+  table.dt tbody tr:last-child td{border-bottom:0}
+  table.dt tbody tr.active td{background:var(--accent-soft)}
+  .row.active .panel{background:var(--accent-soft)}
+  .c-color{width:92px}
+  .c-link{width:216px}
+  .colorcell{display:flex;align-items:center;gap:6px}
+  .hex{font-family:ui-monospace,Consolas,monospace;font-size:11px;color:var(--ink-soft)}
+  .linkrow{display:flex;align-items:flex-start;gap:4px}
+  .open{flex:0 0 auto;display:inline-flex;align-items:center;justify-content:center;width:26px;height:28px;border:1px solid var(--line-strong);border-radius:7px;color:#2c3a52;text-decoration:none;font-size:12px;background:#fff}
+  .open:hover{border-color:var(--accent);color:var(--accent);background:#f5f8fd}
+  .open[hidden]{display:none}
+  .dt-input,.dt-area{font:inherit;color:var(--ink);background:transparent;border:1px solid transparent;border-radius:7px;padding:5px 7px;width:100%;min-width:0}
+  .dt-input:hover,.dt-area:hover{border-color:var(--line)}
+  .dt-input:focus,.dt-area:focus{outline:2px solid var(--accent-soft);border-color:var(--accent);background:#fff}
+  .dt-area{display:block;min-height:32px;line-height:1.45;resize:none;overflow:hidden}
+
+  .foot{display:flex;gap:10px;flex-wrap:wrap;align-items:center;margin-top:12px;color:var(--ink-soft);font-size:12px}
+  .foot .btn{font-weight:500;font-size:12px;padding:6px 10px}
+
+  .toast{position:fixed;right:16px;bottom:16px;z-index:30;display:flex;flex-direction:column;gap:6px}
+  .toast div{background:#2b3340;color:#f2f5fa;border-radius:8px;padding:8px 12px;font-size:12px;box-shadow:var(--shadow);opacity:0;transform:translateY(6px);transition:opacity .18s,transform .18s}
+  .toast div.show{opacity:1;transform:none}
+  .toast div.err{background:#7d3a33}
+
+  @media (max-width:760px){
+    :root{--panel-w:150px;--row-h:40px}
+    .controls{gap:10px;padding:12px}
+    .field input[type=date]{width:132px}
+    table.dt th,.dt-area{font-size:13px}
+    .c-link{width:150px}
+  }
+</style>
+</head>
+<body>
+<div class="app">
+  <div class="topbar">
+    <div class="brand"><h1>線表</h1><span class="sub">開始日・単位・期間で点線グリッドのタイムライン</span></div>
+    <div class="hint">本体ドラッグで移動／両端で伸縮・<kbd>Del</kbd>削除・<kbd>Ctrl+Z</kbd> undo・空欄ダブルクリックでブロック追加・行の＋／−は<b>ブロック</b>の追加／削除・項目の増減は<b>＋項目／－項目</b>・項目詳細は線表下の表へ</div>
+  </div>
+
+  <div class="controls">
+    <label class="field"><span>開始日</span><input type="date" id="startDate"></label>
+    <label class="field"><span>単位</span><select id="unit"><option value="day">日ごと</option><option value="week">週ごと</option></select></label>
+    <label class="field"><span>期間</span><input type="number" id="months" min="1" max="36" step="1" value="3"></label>
+    <label class="field"><span>倍率</span><span class="zoom"><input type="range" id="zoom" min="0.6" max="2.4" step="0.2" value="1"><output id="zoomOut">×1.0</output></span></label>
+    <label class="check"><input type="checkbox" id="alignMonday"><span>週を月曜に揃える</span></label>
+    <span class="spacer"></span>
+    <button class="btn primary" id="addItem" type="button">＋ 項目</button>
+    <button class="btn danger" id="delItem" type="button">－ 項目</button>
+  </div>
+
+  <div class="status">
+    <span class="chip">表示範囲 <b id="rangeLabel">—</b></span>
+    <span class="chip">項目 <b id="itemCount">0</b></span>
+    <span class="chip">ブロック <b id="blockCount">0</b></span>
+    <span class="chip today" id="todayChip">今日 —</span>
+    <span class="chip" id="selChip">選択なし</span>
+  </div>
+
+  <div class="card">
+    <div class="scroll" id="scroll">
+      <div class="inner" id="inner">
+        <div class="head">
+          <div class="panel"><div class="t">項目</div><div class="s" id="unitLabel">日ごと</div></div>
+          <div class="headtrack" id="headtrack"><div class="bands" id="bands"></div><div class="ticks" id="ticks"></div></div>
+        </div>
+        <div class="gridlayer" id="gridlayer"></div>
+        <div class="rows" id="rows"></div>
+      </div>
+    </div>
+  </div>
+
+  <div class="card detail">
+    <div class="card-h">
+      <span class="t">項目詳細</span>
+      <span class="s">項目名と色は線表と同期／詳細・関連リンク・備考は自由に入力（行クリックで項目選択）</span>
+    </div>
+    <div class="tablewrap">
+      <table class="dt">
+        <thead>
+          <tr><th>項目名</th><th class="c-color">色</th><th>項目詳細</th><th class="c-link">関連リンク</th><th>備考</th></tr>
+        </thead>
+        <tbody id="dtBody"></tbody>
+      </table>
+    </div>
+  </div>
+
+  <div class="foot">
+    <button class="btn ghost" id="exportBtn" type="button">JSONダウンロード</button>
+    <button class="btn ghost" id="importBtn" type="button">JSON読み込み</button>
+    <button class="btn ghost" id="resetBtn" type="button">初期例に戻す</button>
+    <button class="btn ghost" id="clearAllBtn" type="button">全消去</button>
+    <input type="file" id="fileInput" accept=".json,application/json" hidden>
+    <span>このブラウザに自動保存</span>
+  </div>
+</div>
+<div class="toast" id="toast"></div>
+
+<script>
+"use strict";
+
+/* ---------- 日付ユーティリティ（YYYY-MM-DD 文字列と UTC ms で扱う） ---------- */
+const ISO_RE = /^\d{4}-\d{2}-\d{2}$/;
+const MS_DAY = 86400000;
+
+function parseISO(s){
+  if(typeof s !== "string" || !ISO_RE.test(s)) return null;
+  const p = s.split("-").map(Number);
+  if(p.length !== 3 || p[1] < 1 || p[1] > 12 || p[2] < 1 || p[2] > 31) return null;
+  const ms = Date.UTC(p[0], p[1] - 1, p[2]);
+  const back = new Date(ms);
+  if(back.getUTCFullYear() !== p[0] || back.getUTCMonth() !== p[1] - 1 || back.getUTCDate() !== p[2]) return null;
+  return ms;
+}
+function toISO(ms){
+  const d = new Date(ms);
+  return d.getUTCFullYear() + "-" + String(d.getUTCMonth() + 1).padStart(2, "0") + "-" + String(d.getUTCDate()).padStart(2, "0");
+}
+function addDays(iso, n){ return toISO(parseISO(iso) + n * MS_DAY); }
+function daysBetween(a, b){ return Math.round((parseISO(b) - parseISO(a)) / MS_DAY); }
+function addMonths(iso, n){
+  const ms = parseISO(iso);
+  const d = new Date(ms);
+  const target = new Date(Date.UTC(d.getUTCFullYear(), d.getUTCMonth() + n, 1));
+  const lastDay = new Date(Date.UTC(target.getUTCFullYear(), target.getUTCMonth() + 1, 0)).getUTCDate();
+  target.setUTCDate(Math.min(d.getUTCDate(), lastDay));
+  return toISO(target.getTime());
+}
+function mondayOf(iso){
+  const dow = new Date(parseISO(iso)).getUTCDay();
+  return addDays(iso, dow === 0 ? -6 : 1 - dow);
+}
+const WEEKDAYS = ["日","月","火","水","木","金","土"];
+function weekdayOf(iso){ return WEEKDAYS[new Date(parseISO(iso)).getUTCDay()]; }
+function labelISO(iso){
+  const d = new Date(parseISO(iso));
+  return d.getUTCFullYear() + "/" + String(d.getUTCMonth() + 1).padStart(2, "0") + "/" + String(d.getUTCDate()).padStart(2, "0") + "(" + weekdayOf(iso) + ")";
+}
+
+/* ---------- モデル ---------- */
+const DAY_W = 26, WEEK_W = 66;
+const PALETTE = [
+  ["#dbe8f6","#7fa9d3","#22425e"], ["#f6e3d6","#d09a72","#5b3a26"], ["#e3f0dd","#8fbb76","#2f4c26"],
+  ["#f2e0ec","#bd87ab","#57324a"], ["#dfe9ee","#87aabf","#224252"], ["#f7ead2","#d0ac68","#5a4524"],
+  ["#e6e2f2","#9f94c0","#3d3657"], ["#f4dcd8","#c7857c","#5c2f2a"], ["#d9ecf2","#7dabbf","#204653"],
+  ["#eef3d9","#a9bb7e","#41522a"], ["#f3e6f0","#c799bd","#523450"], ["#dceaf0","#86b0c2","#224755"]
+];
+
+let uidCounter = 1;
+function newId(){ return "x" + (uidCounter++) + "-" + Math.random().toString(36).slice(2, 7); }
+
+function effectiveStart(state){
+  return state.unit === "week" && state.alignMonday ? mondayOf(state.startDate) : state.startDate;
+}
+function totalDays(state){
+  const s = effectiveStart(state);
+  return daysBetween(s, addMonths(s, state.months));
+}
+/* WEEK_W は 1 週列の幅。週単位では 1 日あたり WEEK_W/7。 */
+function pxPerDay(state){ return (state.unit === "week" ? WEEK_W / 7 : DAY_W) * state.zoom; }
+function pxPerUnit(state){ return state.unit === "week" ? WEEK_W * state.zoom : DAY_W * state.zoom; }
+function columns(state){ const t = totalDays(state); return state.unit === "week" ? Math.ceil(t / 7) : t; }
+function minLen(state){ return state.unit === "week" ? 7 : 1; }
+function stepDays(state){ return state.unit === "week" ? 7 : 1; }
+function snapDay(state, v){ return Math.round(v / stepDays(state)) * stepDays(state); }
+function snapFloor(state, v){ return Math.floor(v / stepDays(state)) * stepDays(state); }
+function snapCeil(state, v){ return Math.ceil(v / stepDays(state)) * stepDays(state); }
+function defaultLen(state){ return state.unit === "week" ? 7 : 7; }
+function blockItem(state, blockId){
+  for(const it of state.items) if(it.blocks.some(b => b.id === blockId)) return it;
+  return null;
+}
+function findBlock(state, blockId){
+  const it = blockItem(state, blockId);
+  return it ? it.blocks.find(b => b.id === blockId) : null;
+}
+
+// 候補 start を含む空き区間 [lo, hi) を返す。候補が兄弟ブロックの内側なら兄弟の右端へ押し出す。
+function freeBounds(state, item, block, start){
+  const t = totalDays(state);
+  const others = item.blocks.filter(b => b.id !== block.id).sort((a, x) => a.start - x.start);
+  let lo = 0, hi = t, s = start;
+  for(const b of others){
+    if(b.start >= hi) break;
+    if(b.start + b.len <= s){ lo = Math.max(lo, b.start + b.len); continue; }
+    if(b.start <= s){ s = b.start + b.len; lo = Math.max(lo, s); continue; }
+    hi = b.start;
+    break;
+  }
+  return { lo, hi };
+}
+function clampMove(state, item, block, wantStart){
+  const t = totalDays(state);
+  const s = Math.max(0, Math.min(snapDay(state, wantStart), t - block.len));
+  const { lo, hi } = freeBounds(state, item, block, s);
+  if(hi - lo < block.len) return { start: block.start, len: block.len };
+  return { start: Math.max(lo, Math.min(s, hi - block.len)), len: block.len };
+}
+function clampResize(state, item, block, edge, wantEdge){
+  const t = totalDays(state), m = minLen(state);
+  if(edge === "l"){
+    const right = block.start + block.len;
+    const want = Math.max(0, Math.min(snapFloor(state, wantEdge), right - m));
+    const { lo, hi } = freeBounds(state, item, block, want);
+    const start = Math.max(lo, Math.min(want, right - m, hi - m));
+    const len = Math.min(right, hi) - start;
+    if(len < m) return { start: block.start, len: block.len };
+    return { start, len };
+  }
+  const start = block.start;
+  const want = Math.min(t, Math.max(start + m, snapCeil(state, wantEdge)));
+  const { lo, hi } = freeBounds(state, item, block, start);
+  const len = Math.min(want, hi) - start;
+  if(len < m || start < lo) return { start: block.start, len: block.len };
+  return { start, len };
+}
+function firstFreeStart(state, item, len){
+  const t = totalDays(state);
+  const sorted = item.blocks.slice().sort((a, b) => a.start - b.start);
+  let cursor = 0;
+  for(const b of sorted){
+    if(b.start > cursor && cursor + len <= b.start) return cursor;
+    cursor = Math.max(cursor, b.start + b.len);
+    if(t - cursor >= len) return cursor;
+  }
+  return cursor + len <= t ? cursor : null;
+}
+// 月バンドは暦月の境界（monthBoundaryDays）と同じ位置で区切る。
+function monthBands(state){
+  const start = effectiveStart(state), t = totalDays(state), out = [];
+  let from = 0;
+  while(from < t){
+    const cur = new Date(parseISO(addDays(start, from)));
+    const nextMonth = daysBetween(start, toISO(Date.UTC(cur.getUTCFullYear(), cur.getUTCMonth() + 1, 1)));
+    const days = Math.min(nextMonth, t) - from;
+    out.push({ label: cur.getUTCFullYear() + "年" + (cur.getUTCMonth() + 1) + "月", days });
+    from += days;
+  }
+  return out;
+}
+function monthBoundaryDays(state){
+  const start = effectiveStart(state), t = totalDays(state), out = [];
+  for(let i = 0; i < t; i++){
+    if(i === 0 || new Date(parseISO(addDays(start, i))).getUTCDate() === 1) out.push(i);
+  }
+  return out;
+}
+function todayIndex(state){
+  const t = totalDays(state);
+  const i = daysBetween(effectiveStart(state), toISO(Date.now()));
+  return i >= 0 && i < t ? i : null;
+}
+function trimToRange(state){
+  const t = totalDays(state), m = minLen(state);
+  let trimmed = 0, dropped = 0;
+  for(const it of state.items){
+    const keep = [];
+    for(const b of it.blocks){
+      if(b.start >= t){ dropped++; continue; }
+      const len = Math.min(b.len, t - b.start);
+      if(len < m){ dropped++; continue; }
+      if(len !== b.len) trimmed++;
+      b.len = len;
+      keep.push(b);
+    }
+    it.blocks = keep;
+  }
+  return { trimmed, dropped };
+}
+
+/* ---------- 入出力 ---------- */
+const KEY = "scheduleView.v1";
+
+function serialize(state){
+  return JSON.stringify({
+    startDate: state.startDate, unit: state.unit, months: state.months,
+    alignMonday: state.alignMonday, zoom: state.zoom,
+    items: state.items.map(it => ({ name: it.name, color: it.color,
+      detail: it.detail || "", links: it.links || "", notes: it.notes || "",
+      blocks: it.blocks.map(b => ({ id: b.id, start: b.start, len: b.len })) }))
+  });
+}
+function deserialize(text){
+  let o;
+  try { o = JSON.parse(text); } catch (e) { return null; }
+  if(!o || typeof o !== "object" || Array.isArray(o)) return null;
+  if(parseISO(o.startDate) === null) return null;
+  const months = Math.round(Number(o.months));
+  if(!Number.isFinite(months) || months < 1 || months > 36) return null;
+  const unit = o.unit === "week" ? "week" : "day";
+  const zoomRaw = Number(o.zoom);
+  const zoom = Number.isFinite(zoomRaw) ? Math.min(2.4, Math.max(0.6, zoomRaw)) : 1;
+  const items = [];
+  const src = Array.isArray(o.items) ? o.items : [];
+  for(const it of src){
+    if(!it || typeof it !== "object") continue;
+    const color = typeof it.color === "string" && /^#[0-9a-f]{6}$/i.test(it.color) ? it.color.toLowerCase() : PALETTE[items.length % PALETTE.length][1];
+    const blocks = [];
+    const bs = Array.isArray(it.blocks) ? it.blocks : [];
+    for(const b of bs){
+      if(!b || typeof b !== "object") continue;
+      const start = Math.round(Number(b.start)), len = Math.round(Number(b.len));
+      if(!Number.isFinite(start) || !Number.isFinite(len) || start < 0 || len < 1) continue;
+      blocks.push({ id: typeof b.id === "string" ? b.id : newId(), start, len });
+    }
+    items.push({ id: newId(), name: typeof it.name === "string" ? it.name : "項目" + (items.length + 1), color,
+      detail: typeof it.detail === "string" ? it.detail : "",
+      links: typeof it.links === "string" ? it.links : "",
+      notes: typeof it.notes === "string" ? it.notes : "", blocks });
+  }
+  const st = { startDate: toISO(parseISO(o.startDate)), unit, months,
+    alignMonday: !!o.alignMonday, zoom, items };
+  trimToRange(st);
+  return st;
+}
+
+/* ---------- 状態と履歴 ---------- */
+let state = null;
+let selected = null;
+const undoStack = [];
+const redoStack = [];
+
+function seedState(){
+  const st = { startDate: mondayOf(toISO(Date.now())), unit: "week", months: 3, alignMonday: true, zoom: 1, items: [] };
+  const plan = [["調査", 0, 7], ["設計", 7, 10], ["実装", 17, 18], ["テスト", 35, 10], ["リリース", 45, 7]];
+  plan.forEach((p, i) => st.items.push({ id: newId(), name: p[0], color: PALETTE[i % PALETTE.length][1],
+    detail: "", links: "", notes: "", blocks: [{ id: newId(), start: p[1], len: p[2] }] }));
+  trimToRange(st);
+  return st;
+}
+function readSaved(){
+  try {
+    const raw = localStorage.getItem(KEY);
+    if(!raw) return null;
+    return deserialize(raw);
+  } catch (e) { return null; }
+}
+let saveTimer = null;
+function save(){
+  clearTimeout(saveTimer);
+  saveTimer = setTimeout(() => {
+    try { localStorage.setItem(KEY, serialize(state)); } catch (e) { toast("保存できませんでした", "err"); }
+  }, 200);
+}
+function snapshot(){ return serialize(state); }
+function pushHistory(){
+  undoStack.push(snapshot());
+  if(undoStack.length > 60) undoStack.shift();
+  redoStack.length = 0;
+}
+function applyState(next){
+  state = next;
+  selected = null;
+  syncControls();
+  renderAll();
+  save();
+}
+function undo(){
+  if(!undoStack.length) { toast("戻すものがありません"); return; }
+  redoStack.push(snapshot());
+  applyState(deserialize(undoStack.pop()));
+}
+function redo(){
+  if(!redoStack.length) { toast("やり直すものがありません"); return; }
+  undoStack.push(snapshot());
+  applyState(deserialize(redoStack.pop()));
+}
+
+/* ---------- 変更操作 ---------- */
+function addItem(afterIndex){
+  pushHistory();
+  const i = afterIndex == null ? state.items.length : afterIndex + 1;
+  const item = { id: newId(), name: "項目" + (state.items.length + 1),
+    color: PALETTE[state.items.length % PALETTE.length][1],
+    detail: "", links: "", notes: "", blocks: [] };
+  const len = defaultLen(state);
+  const s = firstFreeStart(state, item, len);
+  if(s != null) item.blocks.push({ id: newId(), start: s, len });
+  state.items.splice(i, 0, item);
+  trimToRange(state);
+  selected = { itemId: item.id, blockId: item.blocks.length ? item.blocks[0].id : null };
+  renderAll(); save();
+}
+function removeItem(itemId){
+  const idx = state.items.findIndex(it => it.id === itemId);
+  if(idx < 0) return false;
+  const name = state.items[idx].name;
+  pushHistory();
+  state.items.splice(idx, 1);
+  if(selected && selected.itemId === itemId) selected = null;
+  renderAll(); save();
+  toast("項目「" + name + "」を削除しました（Ctrl+Z で戻せます）");
+  return true;
+}
+function addBlockToItem(itemId){
+  const item = state.items.find(it => it.id === itemId);
+  if(!item) return;
+  const len = defaultLen(state);
+  const s = firstFreeStart(state, item, len);
+  if(s == null) { toast("この行に置く空きがありません（期間を伸ばすかブロックを間引く）", "err"); return; }
+  pushHistory();
+  const b = { id: newId(), start: s, len };
+  item.blocks.push(b);
+  item.blocks.sort((a, x) => a.start - x.start);
+  selected = { itemId: item.id, blockId: b.id };
+  renderAll(); save();
+}
+function removeSelectedBlock(itemId){
+  const item = state.items.find(it => it.id === itemId);
+  if(!item) return;
+  if(!item.blocks.length) { toast("この行にブロックはありません", "err"); return; }
+  const blk = selected && selected.itemId === itemId && selected.blockId ? findBlock(state, selected.blockId) : null;
+  if(!blk) { toast("削除するブロックを線表でクリック選択してください", "err"); return; }
+  removeBlock(itemId, blk.id);
+}
+function removeBlock(itemId, blockId){
+  const item = state.items.find(it => it.id === itemId);
+  if(!item) return;
+  const idx = item.blocks.findIndex(b => b.id === blockId);
+  if(idx < 0) return;
+  pushHistory();
+  const b = item.blocks[idx];
+  item.blocks.splice(idx, 1);
+  if(selected && selected.blockId === blockId) selected = { itemId, blockId: null };
+  renderAll(); save();
+  const s = effectiveStart(state);
+  toast("「" + item.name + "」" + labelISO(addDays(s, b.start)) + "→" + labelISO(addDays(s, b.start + b.len - 1)) +
+    "（" + b.len + "日）を削除しました（Ctrl+Z で戻せます）");
+}
+function renameItem(itemId, name){
+  const item = state.items.find(it => it.id === itemId);
+  if(!item || item.name === name) return;
+  pushHistory();
+  item.name = name;
+  renderAll(); save();
+}
+function setItemColor(itemId, color){
+  const item = state.items.find(it => it.id === itemId);
+  if(!item || !/^#[0-9a-f]{6}$/i.test(color)) return;
+  pushHistory();
+  item.color = color.toLowerCase();
+  renderAll(); save();
+}
+function selectBlock(itemId, blockId){
+  selected = blockId ? { itemId, blockId } : { itemId, blockId: null };
+  paintSelection();
+  paintSelChip();
+}
+
+/* ---------- 描画 ---------- */
+function hexRgb(a){
+  return "#" + a.map(v => Math.min(255, Math.max(0, Math.round(v))).toString(16).padStart(2, "0")).join("");
+}
+function luminance(hex){
+  const lin = [1, 3, 5].map(i => parseInt(hex.slice(i, i + 2), 16) / 255)
+    .map(v => (v <= 0.03928 ? v / 12.92 : Math.pow((v + 0.055) / 1.055, 2.4)));
+  return 0.2126 * lin[0] + 0.7152 * lin[1] + 0.0722 * lin[2];
+}
+function contrast(a, b){
+  const l1 = luminance(a), l2 = luminance(b);
+  return (Math.max(l1, l2) + 0.05) / (Math.min(l1, l2) + 0.05);
+}
+function colorFor(item){
+  const c = item.color;
+  const known = PALETTE.find(p => p[1] === c);
+  if(known) return known;
+  const rgb = [1, 3, 5].map(i => parseInt(c.slice(i, i + 2), 16) || 0);
+  const ink = "#2b2b2b";
+  let k = 0.62;
+  let fill = hexRgb(rgb.map(v => v + (255 - v) * k));
+  while(contrast(fill, ink) < 4.5 && k < 0.94){ k += 0.04; fill = hexRgb(rgb.map(v => v + (255 - v) * k)); }
+  return [fill, hexRgb(rgb), contrast(fill, ink) >= 4.5 ? ink : "#ffffff"];
+}
+function svgGrid(totalW, rowsH){
+  const ppd = pxPerDay(state), ppu = pxPerUnit(state), t = totalDays(state);
+  const parts = [];
+  if(state.unit === "day"){
+    const start = effectiveStart(state);
+    for(let i = 0; i < t; i++){
+      const dow = new Date(parseISO(addDays(start, i))).getUTCDay();
+      if(dow === 0 || dow === 6) parts.push('<rect x="' + Math.round(i * ppd) + '" y="0" width="' + Math.round(ppd) + '" height="' + rowsH + '" fill="#f1f4f9"/>');
+    }
+  }
+  for(let r = 1; r < state.items.length; r++){
+    parts.push('<line x1="0" y1="' + (r * ROW_H) + '" x2="' + totalW + '" y2="' + (r * ROW_H) + '" stroke="#d7dde8" stroke-width="1" stroke-dasharray="2 4" shape-rendering="crispEdges"/>');
+  }
+  const cols = columns(state);
+  for(let c = 1; c < cols; c++){
+    parts.push('<line x1="' + Math.round(c * ppu) + '" y1="0" x2="' + Math.round(c * ppu) + '" y2="' + rowsH + '" stroke="#d7dde8" stroke-width="1" stroke-dasharray="2 4" shape-rendering="crispEdges"/>');
+  }
+  for(const d of monthBoundaryDays(state)){
+    if(d === 0) continue;
+    // 月境界は日数の位置で引く（週単位でも日数基準）。ヘッダの月帯は day 基準で
+    // round(acc×ppd) に配置しているので、帯の端とこの線が同一 x で一致する。
+    const x = Math.round(d * ppd);
+    parts.push('<line x1="' + x + '" y1="0" x2="' + x + '" y2="' + rowsH + '" stroke="#b8c2d2" stroke-width="1" shape-rendering="crispEdges"/>');
+  }
+  const ti = todayIndex(state);
+  if(ti != null){
+    const x = state.unit === "week" ? Math.round(Math.floor(ti / 7) * ppu + ppu / 2) : Math.round(ti * ppd + ppd / 2);
+    parts.push('<line x1="' + x + '" y1="0" x2="' + x + '" y2="' + rowsH + '" stroke="#e0574a" stroke-width="2"/>');
+  }
+  return '<svg width="' + totalW + '" height="' + rowsH + '" viewBox="0 0 ' + totalW + ' ' + rowsH + '" aria-hidden="true">' + parts.join("") + '</svg>';
+}
+
+const ROW_H = 42;
+
+function renderAll(){
+  const ppd = pxPerDay(state), ppu = pxPerUnit(state), t = totalDays(state);
+  const totalW = Math.ceil(t * ppd);
+  document.getElementById("inner").style.setProperty("--total-w", totalW + "px");
+
+  const bands = document.getElementById("bands");
+  const ticks = document.getElementById("ticks");
+  bands.innerHTML = "";
+  ticks.innerHTML = "";
+  let acc = 0;
+  for(const b of monthBands(state)){
+    const div = document.createElement("div");
+    div.className = "band";
+    div.style.left = Math.round(acc * ppd) + "px";
+    div.style.width = Math.ceil(b.days * ppd) + "px";
+    div.textContent = b.label;
+    bands.appendChild(div);
+    acc += b.days;
+  }
+  const start = effectiveStart(state);
+  const cols = columns(state);
+  const dense = ppu < 34;
+  for(let c = 0; c < cols; c++){
+    const tick = document.createElement("div");
+    tick.className = "tick";
+    tick.style.left = Math.round(c * ppu) + "px";
+    tick.style.width = Math.round(ppu) + "px";
+    if(state.unit === "day"){
+      const iso = addDays(start, c);
+      const dow = new Date(parseISO(iso)).getUTCDay();
+      if(dow === 0 || dow === 6) tick.classList.add("we");
+      tick.innerHTML = '<span class="d">' + new Date(parseISO(iso)).getUTCDate() + "</span>" + (dense ? "" : "<span>" + weekdayOf(iso) + "</span>");
+    } else {
+      const iso = addDays(start, c * 7);
+      tick.innerHTML = '<span class="d">' + (new Date(parseISO(iso)).getUTCMonth() + 1) + "/" + new Date(parseISO(iso)).getUTCDate() + "</span>" + (dense ? "" : "<span>週" + (c + 1) + "</span>");
+    }
+    ticks.appendChild(tick);
+  }
+
+  const rowsH = Math.max(state.items.length, 1) * ROW_H;
+  document.getElementById("gridlayer").innerHTML = svgGrid(totalW, rowsH);
+
+  const rows = document.getElementById("rows");
+  rows.innerHTML = "";
+  if(!state.items.length){
+    const p = document.createElement("div");
+    p.className = "empty";
+    p.textContent = "項目がありません。＋ 項目から追加してください。";
+    rows.appendChild(p);
+  }
+  state.items.forEach((item, idx) => {
+    const row = document.createElement("div");
+    row.className = "row";
+    row.dataset.itemId = item.id;
+
+    const panel = document.createElement("div");
+    panel.className = "panel";
+    const sw = document.createElement("input");
+    sw.type = "color";
+    sw.className = "swatch";
+    sw.value = item.color;
+    sw.title = "色を変更";
+    sw.addEventListener("change", () => setItemColor(item.id, sw.value));
+    const name = document.createElement("input");
+    name.className = "name";
+    name.value = item.name;
+    name.title = item.name;
+    name.addEventListener("change", () => renameItem(item.id, name.value.trim() || "項目"));
+    const addB = document.createElement("button");
+    addB.className = "mini";
+    addB.type = "button";
+    addB.dataset.role = "addblock";
+    addB.textContent = "+";
+    addB.title = "この行にブロック追加";
+    addB.addEventListener("click", () => addBlockToItem(item.id));
+    const delB = document.createElement("button");
+    delB.className = "mini del";
+    delB.type = "button";
+    delB.dataset.role = "delblock";
+    delB.textContent = "−";
+    delB.title = "この行で選択中のブロックを削除（項目の削除は上部の－ 項目）";
+    delB.addEventListener("click", () => removeSelectedBlock(item.id));
+    panel.append(sw, name, addB, delB);
+
+    const track = document.createElement("div");
+    track.className = "track";
+    track.dataset.itemId = item.id;
+    track.style.width = totalW + "px";
+    track.addEventListener("dblclick", e => {
+      if(e.target.closest(".block")) return;
+      const len = defaultLen(state);
+      let s = Math.max(0, Math.min(snapDay(state, e.offsetX / ppd), t - len));
+      const { lo, hi } = freeBounds(state, item, { id: "__new__", start: s, len }, s);
+      if(hi - lo < len){ toast("その位置に空きがありません", "err"); return; }
+      s = Math.max(lo, Math.min(s, hi - len));
+      pushHistory();
+      const b = { id: newId(), start: s, len };
+      item.blocks.push(b);
+      item.blocks.sort((a, x) => a.start - x.start);
+      selected = { itemId: item.id, blockId: b.id };
+      renderAll(); save();
+    });
+
+    for(const b of item.blocks){
+      const c = colorFor(item);
+      const blk = document.createElement("div");
+      blk.className = "block";
+      blk.dataset.blockId = b.id;
+      blk.style.left = Math.round(b.start * ppd) + "px";
+      blk.style.width = Math.max(6, Math.round(b.len * ppd) - 2) + "px";
+      blk.style.background = "linear-gradient(180deg," + c[0] + "," + shade(c[0], -6) + ")";
+      blk.style.borderColor = c[1];
+      blk.style.color = c[2];
+      const gl = document.createElement("span"); gl.className = "grip l";
+      const gr = document.createElement("span"); gr.className = "grip r";
+      const lab = document.createElement("span"); lab.className = "label"; lab.textContent = item.name;
+      const days = document.createElement("span"); days.className = "days"; days.textContent = b.len + "日";
+      const del = document.createElement("button"); del.className = "del"; del.type = "button"; del.textContent = "−";
+      del.title = "このブロック削除";
+      del.addEventListener("click", e => { e.stopPropagation(); removeBlock(item.id, b.id); });
+      blk.append(gl, lab, days, del, gr);
+      attachDrag(blk, item, b, track);
+      track.appendChild(blk);
+    }
+    row.append(panel, track);
+    rows.appendChild(row);
+  });
+
+  paintSelection();
+  paintStatus();
+  syncControls();
+  renderDetail();
+}
+function shade(hex, amt){
+  const rgb = [1, 3, 5].map(i => parseInt(hex.slice(i, i + 2), 16) + amt);
+  return hexRgb(rgb);
+}
+function paintSelection(){
+  document.querySelectorAll(".block").forEach(el => {
+    el.classList.toggle("selected", !!(selected && selected.blockId === el.dataset.blockId));
+  });
+  const rows = document.querySelectorAll(".row[data-item-id], #dtBody tr[data-item-id]");
+  rows.forEach(el => el.classList.toggle("active", !!(selected && selected.itemId === el.dataset.itemId)));
+  document.querySelectorAll('.row[data-item-id] .mini[data-role="delblock"]').forEach(el => {
+    const id = el.closest(".row").dataset.itemId;
+    el.classList.toggle("off", !(selected && selected.itemId === id && selected.blockId));
+  });
+}
+function paintSelChip(){
+  const chip = document.getElementById("selChip");
+  if(!selected || !selected.blockId){ chip.textContent = "選択なし"; return; }
+  const b = findBlock(state, selected.blockId);
+  const item = blockItem(state, selected.blockId);
+  if(!b || !item){ chip.textContent = "選択なし"; return; }
+  const s = effectiveStart(state);
+  chip.textContent = "選択 " + item.name + " " + labelISO(addDays(s, b.start)) + "→" + labelISO(addDays(s, b.start + b.len - 1)) + "（" + b.len + "日）";
+}
+function paintStatus(){
+  const s = effectiveStart(state), t = totalDays(state);
+  document.getElementById("rangeLabel").textContent = labelISO(s) + " 〜 " + labelISO(addDays(s, t - 1)) + "（" + t + "日）";
+  document.getElementById("itemCount").textContent = String(state.items.length);
+  document.getElementById("blockCount").textContent = String(state.items.reduce((n, it) => n + it.blocks.length, 0));
+  const ti = todayIndex(state);
+  document.getElementById("todayChip").textContent = ti == null ? "今日 " + labelISO(toISO(Date.now())) + "（範囲外）" : "今日 " + labelISO(addDays(s, ti));
+  document.getElementById("unitLabel").textContent = state.unit === "week" ? "週ごと" : "日ごと";
+  paintSelChip();
+}
+function syncControls(){
+  document.getElementById("startDate").value = state.startDate;
+  document.getElementById("unit").value = state.unit;
+  document.getElementById("months").value = String(state.months);
+  document.getElementById("zoom").value = String(state.zoom);
+  document.getElementById("zoomOut").textContent = "×" + state.zoom.toFixed(1);
+  document.getElementById("alignMonday").checked = state.alignMonday;
+}
+
+/* ---------- 項目詳細テーブル ---------- */
+function safeHref(v){
+  const s = String(v == null ? "" : v).trim();
+  if(!s || /[\s\u0000-\u001f]/.test(s)) return null;
+  if(/^https?:\/\//i.test(s) || /^(mailto:|tel:)/i.test(s)) return s;
+  if(/^[\w-]+(\.[\w-]+)+([/?#]\S*)?$/.test(s)) return "https://" + s;
+  return null;
+}
+function autoGrow(el){
+  el.style.height = "auto";
+  const cs = getComputedStyle(el);
+  const border = (parseFloat(cs.borderTopWidth) || 0) + (parseFloat(cs.borderBottomWidth) || 0);
+  el.style.height = Math.max(32, Math.ceil(el.scrollHeight + border)) + "px";
+}
+// テーブルの入力は renderAll を呼ばずに状態へ書き込む（入力中にDOMが差し替わって運位が飛ぶのを避ける）。
+// undo は「フォーカス時の状態」を blur 時に1件積むので、キー単位ではなく編集単位で戻せる。
+function bindField(el, item, key, after){
+  let before = null;
+  el.addEventListener("focus", () => { before = snapshot(); });
+  el.addEventListener("input", () => {
+    item[key] = el.value;
+    save();
+    if(after) after(item, el);
+  });
+  el.addEventListener("blur", () => {
+    if(key === "name" && !item.name.trim()){
+      item.name = "項目";
+      el.value = "項目";
+      save();
+      repaintItemName(item.id);
+    }
+    if(before !== null && before !== snapshot()){
+      undoStack.push(before);
+      if(undoStack.length > 60) undoStack.shift();
+      redoStack.length = 0;
+    }
+    before = null;
+    paintStatus();
+  });
+}
+function repaintItemName(itemId){
+  const item = state.items.find(it => it.id === itemId);
+  if(!item) return;
+  const scope = '[data-item-id="' + itemId + '"]';
+  document.querySelectorAll(".row" + scope + " .name").forEach(el => {
+    if(el === document.activeElement) return;
+    el.value = item.name;
+    el.title = item.name;
+  });
+  document.querySelectorAll(".row" + scope + " .block .label").forEach(el => { el.textContent = item.name; });
+  paintStatus();
+}
+function makeArea(item, key, placeholder){
+  const el = document.createElement("textarea");
+  el.className = "dt-area";
+  el.rows = 1;
+  el.placeholder = placeholder;
+  el.value = item[key] || "";
+  bindField(el, item, key, (it, node) => autoGrow(node));
+  return el;
+}
+function renderDetail(){
+  const body = document.getElementById("dtBody");
+  body.innerHTML = "";
+  if(!state.items.length){
+    const tr = document.createElement("tr");
+    const td = document.createElement("td");
+    td.colSpan = 5;
+    td.className = "empty";
+    td.textContent = "項目がありません。線表で＋ 項目から追加すると、ここに行が出ます。";
+    tr.appendChild(td);
+    body.appendChild(tr);
+    return;
+  }
+  for(const item of state.items){
+    const tr = document.createElement("tr");
+    tr.dataset.itemId = item.id;
+    if(selected && selected.itemId === item.id) tr.classList.add("active");
+
+    const tdName = document.createElement("td");
+    const name = document.createElement("input");
+    name.className = "dt-input";
+    name.type = "text";
+    name.placeholder = "項目名";
+    name.value = item.name;
+    name.title = "線表の項目名と同期";
+    name.addEventListener("keydown", e => { if(e.key === "Enter"){ e.preventDefault(); name.blur(); } });
+    bindField(name, item, "name", it => repaintItemName(it.id));
+    tdName.appendChild(name);
+
+    const tdColor = document.createElement("td");
+    tdColor.className = "c-color";
+    const cwrap = document.createElement("div");
+    cwrap.className = "colorcell";
+    const sw = document.createElement("input");
+    sw.type = "color";
+    sw.className = "swatch";
+    sw.value = item.color;
+    sw.title = "色を変更（線表と同期）";
+    sw.addEventListener("change", () => setItemColor(item.id, sw.value));
+    const hex = document.createElement("span");
+    hex.className = "hex";
+    hex.textContent = item.color;
+    cwrap.append(sw, hex);
+    tdColor.appendChild(cwrap);
+
+    const tdDetail = document.createElement("td");
+    const detail = makeArea(item, "detail", "項目詳細");
+    tdDetail.appendChild(detail);
+
+    const tdLink = document.createElement("td");
+    tdLink.className = "c-link";
+    const lrow = document.createElement("div");
+    lrow.className = "linkrow";
+    const link = document.createElement("input");
+    link.className = "dt-input";
+    link.type = "text";
+    link.placeholder = "https://…";
+    link.value = item.links || "";
+    const open = document.createElement("a");
+    open.className = "open";
+    open.textContent = "↗";
+    open.target = "_blank";
+    open.rel = "noopener noreferrer";
+    const syncOpen = () => {
+      const href = safeHref(link.value);
+      if(href){
+        open.hidden = false;
+        open.href = href;
+        open.title = href;
+      } else {
+        open.hidden = true;
+        open.removeAttribute("href");
+        open.title = "URLを入力すると開けます";
+      }
+    };
+    bindField(link, item, "links", syncOpen);
+    syncOpen();
+    lrow.append(link, open);
+    tdLink.appendChild(lrow);
+
+    const tdNotes = document.createElement("td");
+    const notes = makeArea(item, "notes", "備考");
+    tdNotes.appendChild(notes);
+
+    tr.append(tdName, tdColor, tdDetail, tdLink, tdNotes);
+    tr.addEventListener("click", e => {
+      if(e.target.closest("input,textarea,a,button")) return;
+      selectBlock(item.id, null);
+    });
+    body.appendChild(tr);
+    autoGrow(detail);
+    autoGrow(notes);
+  }
+}
+
+/* ---------- ドラッグ操作 ---------- */
+function attachDrag(blk, item, b, track){
+  blk.addEventListener("pointerdown", e => {
+    if(e.button !== 0) return;
+    // ボタン上の pointerdown をドラッグで握ると setPointerCapture で click の到達先が
+    // ブロック側へ写され、ボタン自身の click が一度も発火しない。
+    if(e.target.closest("button")) return;
+    const rect = track.getBoundingClientRect();
+    const ppd = pxPerDay(state);
+    const x = e.clientX - rect.left;
+    const leftPx = b.start * ppd, rightPx = (b.start + b.len) * ppd;
+    const edge = x <= leftPx + 8 ? "l" : (x >= rightPx - 8 ? "r" : "move");
+    const before = snapshot();
+    const grabOffset = x - leftPx;
+    selectBlock(item.id, b.id);
+    blk.classList.add("dragging");
+    const tip = document.createElement("div");
+    tip.className = "tip";
+    track.appendChild(tip);
+    try { blk.setPointerCapture(e.pointerId); } catch (err) {}
+    let changed = false;
+    const fmt = () => {
+      const s = effectiveStart(state);
+      return labelISO(addDays(s, b.start)) + " → " + labelISO(addDays(s, b.start + b.len - 1)) + "／" + b.len + "日";
+    };
+    const onMove = ev => {
+      const px = ev.clientX - rect.left;
+      let next;
+      if(edge === "move") next = clampMove(state, item, b, (px - grabOffset) / ppd);
+      else if(edge === "l") next = clampResize(state, item, b, "l", px / ppd);
+      else next = clampResize(state, item, b, "r", px / ppd);
+      if(next.start !== b.start || next.len !== b.len){
+        b.start = next.start; b.len = next.len; changed = true;
+        blk.style.left = Math.round(b.start * ppd) + "px";
+        blk.style.width = Math.max(6, Math.round(b.len * ppd) - 2) + "px";
+        blk.querySelector(".days").textContent = b.len + "日";
+      }
+      tip.textContent = fmt();
+      tip.style.left = Math.round(b.start * ppd) + "px";
+    };
+    const finish = () => {
+      blk.removeEventListener("pointermove", onMove);
+      blk.removeEventListener("pointerup", finish);
+      blk.removeEventListener("pointercancel", finish);
+      blk.classList.remove("dragging");
+      tip.remove();
+      if(changed){
+        undoStack.push(before);
+        redoStack.length = 0;
+        item.blocks.sort((a, x) => a.start - x.start);
+        renderAll();
+        save();
+      }
+    };
+    blk.addEventListener("pointermove", onMove);
+    blk.addEventListener("pointerup", finish);
+    blk.addEventListener("pointercancel", finish);
+  });
+}
+
+/* ---------- 通知 ---------- */
+function toast(msg, kind){
+  const box = document.getElementById("toast");
+  const div = document.createElement("div");
+  if(kind === "err") div.className = "err";
+  div.textContent = msg;
+  box.appendChild(div);
+  requestAnimationFrame(() => div.classList.add("show"));
+  setTimeout(() => { div.classList.remove("show"); setTimeout(() => div.remove(), 300); }, 2200);
+}
+
+/* ---------- コントロール ---------- */
+function onStartDate(v){
+  if(parseISO(v) === null) return;
+  pushHistory();
+  state.startDate = v;
+  const r = trimToRange(state);
+  renderAll(); save();
+  if(r.trimmed || r.dropped) toast("開始日変更で " + r.trimmed + "件を短く／" + r.dropped + "件を削除しました", "err");
+}
+function onUnit(v){
+  pushHistory();
+  state.unit = v === "week" ? "week" : "day";
+  const r = trimToRange(state);
+  renderAll(); save();
+  if(r.dropped) toast("単位変更で " + r.dropped + "件が収まりませんでした", "err");
+}
+function onMonths(v){
+  const n = Math.round(Number(v));
+  if(!Number.isFinite(n) || n < 1 || n > 36){ toast("期間は 1〜36 か月", "err"); return; }
+  pushHistory();
+  state.months = n;
+  const r = trimToRange(state);
+  renderAll(); save();
+  if(r.trimmed || r.dropped) toast("期間短縮： " + r.trimmed + "件短く／" + r.dropped + "件削除", "err");
+}
+function onZoom(v){
+  state.zoom = Math.min(2.4, Math.max(0.6, Number(v) || 1));
+  document.getElementById("zoomOut").textContent = "×" + state.zoom.toFixed(1);
+  renderAll(); save();
+}
+function onAlign(v){
+  pushHistory();
+  state.alignMonday = !!v;
+  trimToRange(state);
+  renderAll(); save();
+}
+
+function exportJSON(){
+  const blob = new Blob([serialize(state)], { type: "application/json" });
+  const a = document.createElement("a");
+  a.href = URL.createObjectURL(blob);
+  a.download = "schedule-" + state.startDate + ".json";
+  document.body.appendChild(a);
+  a.click();
+  setTimeout(() => { URL.revokeObjectURL(a.href); a.remove(); }, 400);
+  toast("JSONを書き出しました");
+}
+function importJSON(file){
+  const fr = new FileReader();
+  fr.onload = () => {
+    const st = deserialize(String(fr.result));
+    if(!st){ toast("読み込めませんでした（形式を確認）", "err"); return; }
+    pushHistory();
+    applyState(st);
+    toast("読み込みました（項目 " + st.items.length + "件）");
+  };
+  fr.onerror = () => toast("ファイルを読めません", "err");
+  fr.readAsText(file);
+}
+
+document.addEventListener("keydown", e => {
+  const tag = e.target && e.target.tagName;
+  if(tag === "INPUT" || tag === "SELECT" || tag === "TEXTAREA") return;
+  if((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "z"){
+    e.preventDefault();
+    if(e.shiftKey) redo(); else undo();
+    return;
+  }
+  if(!selected || !selected.blockId) return;
+  const item = blockItem(state, selected.blockId);
+  const b = findBlock(state, selected.blockId);
+  if(!item || !b) return;
+  if(e.key === "Delete" || e.key === "Backspace"){
+    e.preventDefault();
+    removeBlock(item.id, b.id);
+    return;
+  }
+  const step = state.unit === "week" ? 7 : 1;
+  if(e.key === "ArrowLeft" || e.key === "ArrowRight"){
+    e.preventDefault();
+    const dir = e.key === "ArrowLeft" ? -1 : 1;
+    const next = e.shiftKey ? clampResize(state, item, b, "r", b.start + b.len + dir * step)
+                             : clampMove(state, item, b, b.start + dir * step);
+    if(next.start !== b.start || next.len !== b.len){
+      pushHistory();
+      b.start = next.start; b.len = next.len;
+      item.blocks.sort((a, x) => a.start - x.start);
+      renderAll(); save();
+    }
+  }
+});
+
+/* ---------- 起動 ---------- */
+function init(){
+  state = readSaved() || seedState();
+  document.getElementById("startDate").addEventListener("change", e => onStartDate(e.target.value));
+  document.getElementById("unit").addEventListener("change", e => onUnit(e.target.value));
+  document.getElementById("months").addEventListener("change", e => onMonths(e.target.value));
+  document.getElementById("zoom").addEventListener("input", e => onZoom(e.target.value));
+  document.getElementById("alignMonday").addEventListener("change", e => onAlign(e.target.checked));
+  document.getElementById("addItem").addEventListener("click", () => addItem(selected ? state.items.findIndex(it => it.id === selected.itemId) : null));
+  document.getElementById("delItem").addEventListener("click", () => {
+    const target = (selected && selected.itemId) ? selected.itemId
+      : (state.items.length ? state.items[state.items.length - 1].id : null);
+    if(target == null) { toast("項目がありません"); return; }
+    removeItem(target);
+  });
+  document.getElementById("exportBtn").addEventListener("click", exportJSON);
+  document.getElementById("importBtn").addEventListener("click", () => document.getElementById("fileInput").click());
+  document.getElementById("fileInput").addEventListener("change", e => { if(e.target.files[0]) importJSON(e.target.files[0]); e.target.value = ""; });
+  document.getElementById("resetBtn").addEventListener("click", () => { pushHistory(); applyState(seedState()); toast("例を復元しました"); });
+  window.addEventListener("resize", () => { document.querySelectorAll("#dtBody .dt-area").forEach(autoGrow); });
+  document.getElementById("clearAllBtn").addEventListener("click", () => {
+    pushHistory();
+    state.items = [];
+    selected = null;
+    renderAll(); save();
+    toast("全項目を削除しました（Ctrl+Z で戻せます）");
+  });
+  renderAll();
+}
+
+window.__sched = {
+  parseISO, toISO, addDays, addMonths, mondayOf, daysBetween, weekdayOf, labelISO,
+  effectiveStart, totalDays, pxPerDay, pxPerUnit, columns, minLen, stepDays, snapDay, snapFloor, snapCeil, defaultLen,
+  clampMove, clampResize, freeBounds, firstFreeStart, monthBands, monthBoundaryDays,
+  todayIndex, trimToRange, colorFor, shade, luminance, contrast, serialize, deserialize, seedState, findBlock, blockItem, svgGrid, ROW_H, PALETTE,
+  safeHref, renderDetail,
+  getState: () => state
+};
+init();
+</script>
+</body>
+</html>

@@ -1,0 +1,11 @@
+# 追跡するのは scheduleView.html と README.md のみ
+scratch/
+temp.logs/
+worklog.md
+memo.txt
+dont_use_this.scratch.zip
+
+# OS / エディタ
+Thumbs.db
+Desktop.ini
+.DS_Store
