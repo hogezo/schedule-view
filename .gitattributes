@@ -1,0 +1,3 @@
+# 改行は LF で統一する。core.autocrlf=true の環境（Git for Windows のシステム設定）でも
+# checkout 時に CRLF 変換がかからず、クローンしたバイト列が常に同じになる。
+* text=auto eol=lf
