@@ -108,11 +108,12 @@
   .block:hover{box-shadow:0 2px 8px rgba(20,26,36,.16)}
   .block.dragging{cursor:grabbing;box-shadow:0 4px 14px rgba(20,26,36,.22)}
   .block.selected{outline:2px solid var(--accent);outline-offset:1px}
-  .block .label{font-size:12px;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;flex:1 1 auto}
-  .block .days{font-size:11px;opacity:.8;white-space:nowrap}
-  .block .del{position:absolute;right:3px;top:3px;width:16px;height:16px;border:0;border-radius:5px;background:rgba(255,255,255,.75);color:#3c4653;font-size:12px;line-height:1;display:none;align-items:center;justify-content:center;cursor:pointer}
-  .block:hover .del,.block.selected .del{display:inline-flex}
-  .block .del:hover{background:#fff;color:#a0453a}
+  /* 日数表示を中央に置くため、ラベルは「中央 − 日数の半分」までしか伸ばさない（--dw は fitBlockText が実測で設定）。
+     その幅に 2 文字も収まらない狭いブロックはラベルを伏せ、日数だけを左寄せに出す（右側＝右端 8px の掴み域を空けるため）。 */
+  .block .label{font-size:12px;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;flex:1 1 auto;max-width:calc(50% - var(--dw, 24px)/2 - 4px)}
+  .block.narrow .label{display:none}
+  .block .days{position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);pointer-events:none;font-size:11px;opacity:.8;white-space:nowrap}
+  .block.narrow .days{left:9px;transform:translateY(-50%)}
   .grip{position:absolute;top:0;bottom:0;width:9px;cursor:ew-resize;display:flex;justify-content:center;align-items:center}
   .grip.l{left:0}
   .grip.r{right:0}
@@ -754,21 +755,28 @@ function renderAll(){
       const gr = document.createElement("span"); gr.className = "grip r";
       const lab = document.createElement("span"); lab.className = "label"; lab.textContent = item.name;
       const days = document.createElement("span"); days.className = "days"; days.textContent = b.len + "日";
-      const del = document.createElement("button"); del.className = "del"; del.type = "button"; del.textContent = "−";
-      del.title = "このブロック削除";
-      del.addEventListener("click", e => { e.stopPropagation(); removeBlock(item.id, b.id); });
-      blk.append(gl, lab, days, del, gr);
+      blk.append(gl, lab, days, gr);
       attachDrag(blk, item, b, track);
       track.appendChild(blk);
     }
     row.append(panel, track);
     rows.appendChild(row);
   });
+  // 日数とラベルの取り分は実測幅で決めるため、行が DOM に付いてから測る
+  for(const blk of rows.querySelectorAll(".block")) fitBlockText(blk);
 
   paintSelection();
   paintStatus();
   syncControls();
   renderDetail();
+}
+/* 中央の日数表示と左のラベルの取り分を決める。日数の実測幅を --dw に置いてラベルの
+   max-width（中央 − 日数の半分）へ渡し、2 文字分も残らないブロックは narrow でラベルを伏せる。 */
+function fitBlockText(blk){
+  const days = blk.querySelector(".days");
+  const dw = days.offsetWidth;
+  blk.style.setProperty("--dw", dw + "px");
+  blk.classList.toggle("narrow", (blk.clientWidth - 18) / 2 - dw / 2 - 4 < 24);
 }
 function shade(hex, amt){
   const rgb = [1, 3, 5].map(i => parseInt(hex.slice(i, i + 2), 16) + amt);
@@ -973,9 +981,6 @@ function renderDetail(){
 function attachDrag(blk, item, b, track){
   blk.addEventListener("pointerdown", e => {
     if(e.button !== 0) return;
-    // ボタン上の pointerdown をドラッグで握ると setPointerCapture で click の到達先が
-    // ブロック側へ写され、ボタン自身の click が一度も発火しない。
-    if(e.target.closest("button")) return;
     const rect = track.getBoundingClientRect();
     const ppd = pxPerDay(state);
     const x = e.clientX - rect.left;
@@ -987,12 +992,20 @@ function attachDrag(blk, item, b, track){
     blk.classList.add("dragging");
     const tip = document.createElement("div");
     tip.className = "tip";
+    tip.style.transform = edge === "r" ? "translateX(-100%)" : edge === "move" ? "translateX(-50%)" : "none";
     track.appendChild(tip);
+    const daysEl = blk.querySelector(".days");
     try { blk.setPointerCapture(e.pointerId); } catch (err) {}
     let changed = false;
     const fmt = () => {
       const s = effectiveStart(state);
       return labelISO(addDays(s, b.start)) + " → " + labelISO(addDays(s, b.start + b.len - 1)) + "／" + b.len + "日";
+    };
+    // 掴んだ側の端に tip を寄せる（左端ドラッグは左端、右端ドラッグは右端、移動は中央）。
+    // 従来は常にブロック左端アンカーで、幅 466px の右端を掴むと読み出しが 462px 左に離れた。
+    const placeTip = () => {
+      const l = b.start * ppd, r = (b.start + b.len) * ppd;
+      tip.style.left = Math.round(edge === "l" ? l : edge === "r" ? r : (l + r) / 2) + "px";
     };
     const onMove = ev => {
       const px = ev.clientX - rect.left;
@@ -1004,10 +1017,11 @@ function attachDrag(blk, item, b, track){
         b.start = next.start; b.len = next.len; changed = true;
         blk.style.left = Math.round(b.start * ppd) + "px";
         blk.style.width = Math.max(6, Math.round(b.len * ppd) - 2) + "px";
-        blk.querySelector(".days").textContent = b.len + "日";
+        daysEl.textContent = b.len + "日";
+        fitBlockText(blk);
       }
       tip.textContent = fmt();
-      tip.style.left = Math.round(b.start * ppd) + "px";
+      placeTip();
     };
     const finish = () => {
       blk.removeEventListener("pointermove", onMove);

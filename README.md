@@ -44,11 +44,13 @@ start scheduleView.html          # Windows
 | 追加 | トラックの空欄をダブルクリック（クリック位置にスナップ、長さ 7 日。既に埋まっている位置はトーストで断ります）／行の `＋` |
 | 移動 | ブロック本体をドラッグ／`←` `→` |
 | 伸ばす・縮める | ブロックの左右端をドラッグ／`Shift` + `←` `→`（右端を 1 単位） |
-| 削除 | `Del` または `Backspace`／ブロックにマウスを乗せて出る `−`／行の `−`（選択中のみ） |
+| 削除 | `Del` または `Backspace`／行の `−`（その行で選択中のブロックのみ） |
 | 選択 | ブロックをクリック（項目詳細テーブルの該当行もハイライト） |
 | 項目だけ選択 | 項目行の何もない部分をクリック（ブロックは未選択のまま行が強調） |
 
 ブロック同士は重なりません。移動・伸縮は他のブロックの空き範囲内に自動で収まり、単位が「週ごと」のときは 7 日単位のスナップ・最短 7 日になります。
+
+ブロック面は**中央に日数**、その左に項目名を出します。左右端 8px が伸縮の掴み域なので、日数は中央に置いて右端を掴みやすくしています。幅が狭く項目名を 2 文字も収められないブロックは項目名を伏せ、**日数だけを左寄せ**（ブロックの左端から 10px）に出します。中央寄せのままだと狭いブロックでは右半分がからっぽになり、掴めるはずの右端が掴みにくそうに見えていました（狭くないブロックは中央のままなので右端 8px の掴み域には重なりません）。項目名は左の項目欄と項目詳細テーブルに出ます。ドラッグ中の日付読み出し（tip）は**掴んだ側の端**に出します（本体ドラッグ＝中央、左端＝左端、右端＝右端）。従来は常にブロックの左端アンカーで、幅 466px のブロックの右端を掴むと読み出しが 462px 左に離れていました。
 
 ### キーボード
 
@@ -137,10 +139,14 @@ JSON の形：
 | `scratch/` | 検証ハーネスとスクリーンショット（**成果物ではありません**） |
 | `temp.logs/` | 実行ログ（一時） |
 
-`scratch/` の検証ハーネス（`cdp.js` / `dtbtn.js` / `dtprobe.js` / `dtshot.js` / `dtstats.js`）は Node.js で動きます。実行すると headless Chrome を起動し、実マウス入力で操作した結果を DOM 状態・実ピクセルと突合します。成果物には一切組み込みません。
+`scratch/` の検証ハーネス（`cdp.js` / `dtbtn.js` / `dtprobe.js` / `dtshot.js` / `dtstats.js` / `dtdel.js` / `dtdaysprobe.js` / `dtnarrowpx.js`）は Node.js で動きます。実行すると headless Chrome を起動し、実マウス入力で操作した結果を DOM 状態・実ピクセルと突合します。成果物には一切組み込みません。
 
 ```
 node scratch/dtstats.js
+node scratch/dtdel.js          # 削除ボタン廃止＋日数中央寄せ＋狭いブロックの左寄せ＋tip 位置（53 検査）
+node scratch/dtdel.js --centre-before   # negative control（左寄せ前のコピーを検査）
+node scratch/dtdaysprobe.js    # ブロック内の幾何と tip の距離を実測（合否なし）
+node scratch/dtnarrowpx.js     # 撮れた PNG で狭いブロックの右半分に文字インクが無いことを確認
 ```
 
-最終検証（2026-11-08 13:48 JST 実行）：`dtbtn.js` PASS 24 / FAIL 0、既存回帰 `dtprobe.js` PASS 45 / FAIL 0 / SKIP 0、`dtshot.js` PASS 16 / FAIL 0。変更前コピーでの negative control は PASS 13 / FAIL 10。詳細は `worklog.md`。
+最終検証（2026-11-11 20:33〜20:42 JST 実行）：`dtdel.js` PASS 53 / FAIL 0（10,418ms）。negative control は左寄せ前で PASS 50 / FAIL 3（FAIL は左寄せ検査 I1〜I3 のみ）、日数中央寄せ前で PASS 36 / FAIL 17、さらにその前（ブロック内 `−` 残存）で PASS 26 / FAIL 27。狭いブロックの日数は盒左端から 10px・盒の右半分は 0 画素（変更前 148 画素）、狭くないブロックは中心偏差 0px のまま。既存回帰は `dtprobe.js` PASS 45 / FAIL 0 / SKIP 0、`dtshot.js` PASS 16 / FAIL 0。`dtbtn.js` は PASS 20 / FAIL 1（937ms）で、唯一の FAIL は廃止したブロック内 `−` をまだ見に行く検査（T6）です。詳細は `worklog.md`。
